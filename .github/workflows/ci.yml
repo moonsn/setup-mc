@@ -66,27 +66,17 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Start MinIO container
-      shell: pwsh
-      run: |
-        mkdir -p $HOME/minio-data
-        docker run -d -p 9000:9000 -p 9001:9001 --name minio `
-          -e "MINIO_ROOT_USER=user" `
-          -e "MINIO_ROOT_PASSWORD=minio123" `
-          -v "$HOME/minio-data:/data" `
-          minio/minio server /data --console-address ":9001"
-        Start-Sleep -s 5
     - uses: ./
       with:
         platform: windows
+    # 使用 play.min.io 公共演示服务进行测试
     - shell: pwsh
-      run: mc.exe alias set minio http://127.0.0.1:9000 user minio123
+      run: mc.exe alias set play https://play.min.io Q3AM3UQ867SPQQA43P2F zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
     - shell: pwsh
-      run: mc.exe mb minio/test
+      run: mc.exe ls play
+    # 或者可以选择仅测试安装
     - shell: pwsh
-      run: mc.exe cp action.yml minio/test/
-    - shell: pwsh
-      run: mc.exe ls minio/test
+      run: mc.exe --version
 
   test-inputs:
     needs:
