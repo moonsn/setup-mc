@@ -1,4 +1,4 @@
-name: 'hostwithquantum/setup-mc'
+name: 'moonsn/setup-mc'
 description: 'Setup the minio client (mc) on GitHub Actions'
 branding:
   icon: 'file'
