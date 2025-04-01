@@ -78,7 +78,8 @@ jobs:
     - shell: pwsh
       run: mc.exe --version
 
-  test-inputs:
+  # Linux测试输入参数
+  test-inputs-linux:
     needs:
     - lint
     runs-on: ubuntu-latest
@@ -94,9 +95,68 @@ jobs:
     - uses: actions/checkout@v4
     - uses: ./
       with:
+        platform: linux
         alias-name: example
         alias-url: http://127.0.0.1:9002
         alias-access-key: user
         alias-secret-key: minio123
-    - run: mc mb example/test-bucket
-    - run: mc ls example/test-bucket
+    - run: |
+        # 测试别名是否正确配置
+        mc ls example
+        # 创建测试桶和文件
+        mc mb example/test-inputs-linux
+        echo "Testing inputs for linux" > test-file.txt
+        mc cp test-file.txt example/test-inputs-linux/
+        mc ls example/test-inputs-linux
+
+  # macOS测试输入参数
+  test-inputs-macos:
+    needs:
+    - lint
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Start MinIO server on macOS
+      run: |
+        brew install minio/stable/minio
+        mkdir -p ~/.minio/data
+        export MINIO_ROOT_USER=user
+        export MINIO_ROOT_PASSWORD=minio123
+        minio server ~/.minio/data --console-address ":9001" &
+        sleep 5
+    - uses: ./
+      with:
+        platform: darwin
+        alias-name: example
+        alias-url: http://127.0.0.1:9000
+        alias-access-key: user
+        alias-secret-key: minio123
+    - run: |
+        # 测试别名是否正确配置
+        mc ls example
+        # 创建测试桶和文件
+        mc mb example/test-inputs-darwin
+        echo "Testing inputs for darwin" > test-file.txt
+        mc cp test-file.txt example/test-inputs-darwin/
+        mc ls example/test-inputs-darwin
+
+  # Windows测试输入参数
+  test-inputs-windows:
+    needs:
+    - lint
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: ./
+      with:
+        platform: windows
+        alias-name: play
+        alias-url: https://play.min.io
+        alias-access-key: Q3AM3UQ867SPQQA43P2F
+        alias-secret-key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    - shell: pwsh
+      run: |
+        # 测试别名是否正确配置
+        mc.exe ls play
+        # 测试版本
+        mc.exe --version
