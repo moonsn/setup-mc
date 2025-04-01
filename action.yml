@@ -4,10 +4,18 @@ branding:
   icon: 'file'
   color: 'purple'
 inputs:
+  platform:
+    description: 'The platform to install mc for (auto, windows, darwin, linux)'
+    required: false
+    default: 'auto'
+  arch:
+    description: 'The architecture to install mc for (auto, amd64, arm64)'
+    required: false
+    default: 'auto'
   dl-url:
-    description: 'The url to download mc from'
-    required: true
-    default: 'https://dl.minio.io/client/mc/release/linux-amd64/mc'
+    description: 'The url to download mc from (if specified, overrides platform/arch detection)'
+    required: false
+    default: ''
   alias-name:
     description: 'The name of the alias'
     required: false
@@ -26,30 +34,98 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: create bin directory
-    run: mkdir ${{ github.action_path }}/bin
+  - name: Determine platform and architecture
+    id: platform
     shell: bash
-  - name: install the client
+    run: |
+      if [[ "${{ inputs.platform }}" == "auto" ]]; then
+        case "${{ runner.os }}" in
+          Windows)
+            echo "PLATFORM=windows" >> $GITHUB_OUTPUT
+            ;;
+          macOS)
+            echo "PLATFORM=darwin" >> $GITHUB_OUTPUT
+            ;;
+          Linux)
+            echo "PLATFORM=linux" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "::error::Unsupported platform: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+      else
+        echo "PLATFORM=${{ inputs.platform }}" >> $GITHUB_OUTPUT
+      fi
+
+      if [[ "${{ inputs.arch }}" == "auto" ]]; then
+        case "${{ runner.arch }}" in
+          X64)
+            echo "ARCH=amd64" >> $GITHUB_OUTPUT
+            ;;
+          ARM64)
+            echo "ARCH=arm64" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "::error::Unsupported architecture: ${{ runner.arch }}"
+            exit 1
+            ;;
+        esac
+      else
+        echo "ARCH=${{ inputs.arch }}" >> $GITHUB_OUTPUT
+      fi
+
+  - name: Set download URL
+    id: download
+    shell: bash
+    run: |
+      if [[ "${{ inputs.dl-url }}" != "" ]]; then
+        echo "URL=${{ inputs.dl-url }}" >> $GITHUB_OUTPUT
+      else
+        PLATFORM="${{ steps.platform.outputs.PLATFORM }}"
+        ARCH="${{ steps.platform.outputs.ARCH }}"
+        
+        # Use Windows executable with .exe extension
+        if [[ "$PLATFORM" == "windows" ]]; then
+          echo "URL=https://dl.minio.io/client/mc/release/$PLATFORM-$ARCH/mc.exe" >> $GITHUB_OUTPUT
+          echo "EXT=.exe" >> $GITHUB_OUTPUT
+        else
+          echo "URL=https://dl.minio.io/client/mc/release/$PLATFORM-$ARCH/mc" >> $GITHUB_OUTPUT
+          echo "EXT=" >> $GITHUB_OUTPUT
+        fi
+      fi
+
+  - name: Create bin directory
+    shell: bash
+    run: mkdir -p ${{ github.action_path }}/bin
+
+  - name: Install the client
+    shell: bash
     run: |
       curl \
         -H 'Cache-Control: no-cache' \
-        "${{ inputs.dl-url }}" \
-        -o ${{ github.action_path }}/bin/mc
-      echo "Installed mc from ${{ inputs.dl-url }}" >> $GITHUB_STEP_SUMMARY
+        "${{ steps.download.outputs.URL }}" \
+        -o "${{ github.action_path }}/bin/mc${{ steps.download.outputs.EXT }}"
+      echo "Installed mc from ${{ steps.download.outputs.URL }}" >> $GITHUB_STEP_SUMMARY
+
+  - name: Make executable (Unix)
+    if: runner.os != 'Windows'
     shell: bash
-  - name: make executable
-    run: chmod +x ${{ github.action_path }}/bin/mc
+    run: chmod +x "${{ github.action_path }}/bin/mc"
+
+  - name: Add to path
     shell: bash
-  - name: add to path
     run: echo "${{ github.action_path }}/bin" >> $GITHUB_PATH
+
+  - name: Verify installation
     shell: bash
-  - run: mc --version
-    shell: bash
+    run: mc${{ steps.download.outputs.EXT }} --version
+
   - if: ${{ inputs.alias-url != '' }}
     shell: bash
     run: |
       set -euo pipefail
-      mc alias set \
+      mc${{ steps.download.outputs.EXT }} alias set \
       ${{ inputs.alias-name }} \
       ${{ inputs.alias-url }} \
       ${{ inputs.alias-access-key }} \
