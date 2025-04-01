@@ -95,11 +95,18 @@ runs:
         fi
       fi
 
-  - name: Create bin directory
+  - name: Create bin directory (Unix)
+    if: runner.os != 'Windows'
     shell: bash
-    run: mkdir -p ${{ github.action_path }}/bin
+    run: mkdir -p "${{ github.action_path }}/bin"
 
-  - name: Install the client
+  - name: Create bin directory (Windows)
+    if: runner.os == 'Windows'
+    shell: pwsh
+    run: New-Item -ItemType Directory -Force -Path "${{ github.action_path }}\bin"
+
+  - name: Install the client (Unix)
+    if: runner.os != 'Windows'
     shell: bash
     run: |
       curl \
@@ -108,20 +115,35 @@ runs:
         -o "${{ github.action_path }}/bin/mc${{ steps.download.outputs.EXT }}"
       echo "Installed mc from ${{ steps.download.outputs.URL }}" >> $GITHUB_STEP_SUMMARY
 
+  - name: Install the client (Windows)
+    if: runner.os == 'Windows'
+    shell: pwsh
+    run: |
+      curl.exe -H "Cache-Control: no-cache" `
+        -o "${{ github.action_path }}\bin\mc${{ steps.download.outputs.EXT }}" `
+        "${{ steps.download.outputs.URL }}"
+      echo "Installed mc from ${{ steps.download.outputs.URL }}" >> $env:GITHUB_STEP_SUMMARY
+
   - name: Make executable (Unix)
     if: runner.os != 'Windows'
     shell: bash
     run: chmod +x "${{ github.action_path }}/bin/mc"
 
-  - name: Add to path
+  - name: Add to path (Unix)
+    if: runner.os != 'Windows'
     shell: bash
     run: echo "${{ github.action_path }}/bin" >> $GITHUB_PATH
+
+  - name: Add to path (Windows)
+    if: runner.os == 'Windows'
+    shell: pwsh
+    run: echo "${{ github.action_path }}\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
   - name: Verify installation
     shell: bash
     run: mc${{ steps.download.outputs.EXT }} --version
 
-  - if: ${{ inputs.alias-url != '' }}
+  - if: ${{ inputs.alias-url != '' && runner.os != 'Windows' }}
     shell: bash
     run: |
       set -euo pipefail
@@ -131,3 +153,13 @@ runs:
       ${{ inputs.alias-access-key }} \
       ${{ inputs.alias-secret-key }}
       echo "Configured [${{ inputs.alias-name}}](${{ inputs.alias-url }})" >> $GITHUB_STEP_SUMMARY
+
+  - if: ${{ inputs.alias-url != '' && runner.os == 'Windows' }}
+    shell: pwsh
+    run: |
+      mc${{ steps.download.outputs.EXT }} alias set `
+      ${{ inputs.alias-name }} `
+      ${{ inputs.alias-url }} `
+      ${{ inputs.alias-access-key }} `
+      ${{ inputs.alias-secret-key }}
+      echo "Configured [${{ inputs.alias-name}}](${{ inputs.alias-url }})" >> $env:GITHUB_STEP_SUMMARY
